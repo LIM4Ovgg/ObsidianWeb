@@ -2,9 +2,8 @@
 <html lang="pt-BR">
 
 <head>
-    <meta charset="UTF-8">
+    <meta charset="UTF-8" />
     <title>Visualizador Obsidian Canvas</title>
-    <script src="https://unpkg.com/cytoscape@3.26.0/dist/cytoscape.min.js"></script>
     <style>
         body {
             margin: 0;
@@ -14,12 +13,14 @@
             text-align: center;
         }
 
-        h1 {
-            font-size: 1.5em;
+        header {
+            padding: 16px;
+            background: #1a1a1a;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, .5);
         }
 
         #canvas-container {
-            height: 78vh;
+            height: 90vh;
             position: relative;
             overflow: hidden;
             cursor: grab;
@@ -37,9 +38,11 @@
             border-radius: 8px;
             padding: 8px;
             background: #2c2c2c;
-            color: white;
+            color: #fff;
             text-align: center;
             overflow: hidden;
+            z-index: 1;
+            /* nós acima/abaixo do svg controlado abaixo */
         }
 
         .node img {
@@ -47,41 +50,36 @@
             max-height: 100%;
         }
 
+        /* SVG cobre todo o canvas; nada é cortado e continua alinhado 1:1 com os nós */
         svg {
             position: absolute;
             top: 0;
             left: 0;
-            width: 100%;
-            height: 100%;
+            overflow: visible;
             pointer-events: none;
+            z-index: 0;
+            /* deixa as linhas por cima dos nós (garante seta visível) */
         }
 
-        line {
+        /* só estiliza as arestas geradas, não mexe no <path> do <defs> */
+        path.edge {
             stroke: #aaa;
             stroke-width: 2;
+            stroke-linecap: round;
+            fill: none;
             marker-end: url(#arrow);
-        }
-
-        header {
-            padding: 16px;
-            background: #1a1a1a;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
-        }
-
-        #cy {
-            width: 100vw;
-            height: 90vh;
-            display: block;
+            vector-effect: non-scaling-stroke;
+            /* zoom não deforma a espessura */
         }
 
         #fileInput {
-            margin: 15px;
+            margin: 10px;
             padding: 10px 20px;
-            font-size: 12px;
+            font-size: 14px;
             border: none;
             border-radius: 8px;
             background: #8e44ad;
-            color: white;
+            color: #fff;
             cursor: pointer;
         }
 
@@ -94,67 +92,41 @@
 <body>
     <header>
         <h1>🧠 Visualizador de Canvas do Obsidian</h1>
-        <input type="file" id="fileInput" accept=".canvas">
+        <input type="file" id="fileInput" multiple webkitdirectory />
     </header>
+
     <div id="canvas-container">
         <div id="canvas-inner">
-            <svg id="edges"></svg>
+            <svg id="edges" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <!-- Marcador da seta (triângulo). NÃO remover! -->
+                    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"
+                        markerUnits="userSpaceOnUse">
+                        <path d="M0,0 L0,12 L12,6 Z" fill="#aaa" />
+                    </marker>
+                </defs>
+            </svg>
         </div>
     </div>
 
     <script>
-        const cy = cytoscape({
-            container: document.getElementById('canvas-container'),
-            style: [
-                {
-                    selector: 'node',
-                    style: {
-                        'background-color': '#8e44ad',
-                        'label': 'data(label)',
-                        'color': '#fff',
-                        'font-size': 12,
-                        'text-valign': 'center',
-                        'text-halign': 'center'
-                    }
-                },
-                {
-                    selector: 'edge',
-                    style: {
-                        'width': 2,
-                        'line-color': '#aaa',
-                        'target-arrow-color': '#aaa',
-                        'target-arrow-shape': 'triangle'
-                    }
-                }
-            ],
-            layout: {
-                name: 'cose',
-                animate: true
-            }
-        });
         const container = document.getElementById("canvas-container");
         const inner = document.getElementById("canvas-inner");
         const edgesSvg = document.getElementById("edges");
 
-        let scale = 1;
-        let originX = 0;
-        let originY = 0;
-        let isPanning = false;
-        let startX, startY;
+        let scale = 1, originX = 0, originY = 0, isPanning = false, startX, startY;
 
-        // Pan com mouse
+        // -------- PAN --------
         container.addEventListener("mousedown", e => {
             isPanning = true;
             startX = e.clientX - originX;
             startY = e.clientY - originY;
             container.style.cursor = "grabbing";
         });
-
         container.addEventListener("mouseup", () => {
             isPanning = false;
             container.style.cursor = "grab";
         });
-
         container.addEventListener("mousemove", e => {
             if (!isPanning) return;
             originX = e.clientX - startX;
@@ -162,23 +134,21 @@
             updateTransform();
         });
 
-        // Zoom com scroll
+        // -------- ZOOM --------
         container.addEventListener("wheel", e => {
             e.preventDefault();
-            const zoomFactor = 1.1;
+            const zoom = 1.1;
             const mouseX = e.clientX - container.offsetLeft;
             const mouseY = e.clientY - container.offsetTop;
 
             if (e.deltaY < 0) {
-                // zoom in
-                scale *= zoomFactor;
-                originX = mouseX - (mouseX - originX) * zoomFactor;
-                originY = mouseY - (mouseY - originY) * zoomFactor;
+                scale *= zoom;
+                originX = mouseX - (mouseX - originX) * zoom;
+                originY = mouseY - (mouseY - originY) * zoom;
             } else {
-                // zoom out
-                scale /= zoomFactor;
-                originX = mouseX - (mouseX - originX) / zoomFactor;
-                originY = mouseY - (mouseY - originY) / zoomFactor;
+                scale /= zoom;
+                originX = mouseX - (mouseX - originX) / zoom;
+                originY = mouseY - (mouseY - originY) / zoom;
             }
             updateTransform();
         }, { passive: false });
@@ -187,27 +157,53 @@
             inner.style.transform = `translate(${originX}px, ${originY}px) scale(${scale})`;
         }
 
-        // Carregar .canvas
-        document.getElementById("fileInput").addEventListener("change", function (event) {
-            const file = event.target.files[0];
-            if (!file) return;
+        // Calcula ponto na borda do retângulo saindo do centro em direção a (tx,ty)
+        // extra > 0 empurra para fora do retângulo (linha fica mais curta).
+        function pointOnRectEdge(cx, cy, w, h, tx, ty, extra = 8) {
+            const dx = tx - cx, dy = ty - cy;
+            if (dx === 0 && dy === 0) return { x: cx, y: cy };
+            const hx = w / 2, hy = h / 2;
+
+            const tX = dx === 0 ? Infinity : Math.abs(hx / dx);
+            const tY = dy === 0 ? Infinity : Math.abs(hy / dy);
+            const t = Math.min(tX, tY);
+
+            let x = cx + dx * t;
+            let y = cy + dy * t;
+
+            const len = Math.hypot(dx, dy) || 1;
+            x += (dx / len) * extra;
+            y += (dy / len) * extra;
+
+            return { x, y };
+        }
+
+        document.getElementById("fileInput").addEventListener("change", async (event) => {
+            const files = Array.from(event.target.files);
+
+            // índice p/ achar imagens locais
+            const fileMap = {};
+            files.forEach(f => fileMap[f.name] = f);
+
+            const canvasFile = files.find(f => f.name.endsWith(".canvas"));
+            if (!canvasFile) {
+                alert("Nenhum arquivo .canvas encontrado!");
+                return;
+            }
 
             const reader = new FileReader();
-            reader.onload = function (e) {
+            reader.onload = async e => {
                 const data = JSON.parse(e.target.result);
 
-                // Limpa
+                // LIMPA (somente as arestas geradas; preserva <defs> e o marcador)
                 inner.querySelectorAll(".node").forEach(el => el.remove());
-                edgesSvg.innerHTML = `
-          <defs>
-            <marker id="arrow" markerWidth="10" markerHeight="10" refX="6" refY="3" orient="auto" markerUnits="strokeWidth">
-              <path d="M0,0 L0,6 L9,3 z" fill="#aaa"/>
-            </marker>
-          </defs>
-        `;
+                edgesSvg.querySelectorAll(":scope > path.edge").forEach(el => el.remove());
 
                 const nodes = {};
-                data.nodes.forEach(node => {
+                let maxX = 0, maxY = 0;
+
+                // ----- NÓS -----
+                for (const node of data.nodes) {
                     const div = document.createElement("div");
                     div.className = "node";
                     div.style.left = node.x + "px";
@@ -217,9 +213,18 @@
 
                     if (node.type === "text") {
                         div.textContent = node.text;
-                    } else if (node.type === "file" && node.file.endsWith(".png")) {
+                    } else if (node.type === "file" && node.file) {
                         const img = document.createElement("img");
-                        img.src = node.file;
+                        const lower = node.file.toLowerCase();
+                        if (fileMap[node.file]) {
+                            const imgReader = new FileReader();
+                            imgReader.onload = ev => img.src = ev.target.result;
+                            imgReader.readAsDataURL(fileMap[node.file]);
+                        } else if (/\.(png|jpg|jpeg|svg)$/.test(lower)) {
+                            img.src = node.file;
+                        } else {
+                            img.alt = "Arquivo não encontrado: " + node.file;
+                        }
                         div.appendChild(img);
                     } else {
                         div.textContent = node.id;
@@ -227,28 +232,49 @@
 
                     inner.appendChild(div);
                     nodes[node.id] = { x: node.x, y: node.y, w: node.width, h: node.height };
-                });
 
-                data.edges.forEach(edge => {
+                    maxX = Math.max(maxX, node.x + node.width);
+                    maxY = Math.max(maxY, node.y + node.height);
+                }
+
+                // ----- DIMENSIONA O SVG PARA COBRIR TODO O CANVAS -----
+                const margin = 300;
+                const svgW = Math.max(maxX + margin, container.clientWidth);
+                const svgH = Math.max(maxY + margin, container.clientHeight);
+                edgesSvg.setAttribute("width", svgW);
+                edgesSvg.setAttribute("height", svgH);
+                edgesSvg.removeAttribute("viewBox"); // 1:1 com coordenadas dos nós
+
+                // ----- ARESTAS (Bezier curta) -----
+                for (const edge of (data.edges || [])) {
                     const from = nodes[edge.fromNode];
                     const to = nodes[edge.toNode];
-                    if (from && to) {
-                        const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
-                        line.setAttribute("x1", from.x + from.w / 2);
-                        line.setAttribute("y1", from.y + from.h / 2);
-                        line.setAttribute("x2", to.x + to.w / 2);
-                        line.setAttribute("y2", to.y + to.h / 2);
-                        edgesSvg.appendChild(line);
-                    }
-                });
+                    if (!from || !to) continue;
 
-                // Resetar zoom/posição ao carregar
-                scale = 1;
-                originX = 0;
-                originY = 0;
-                updateTransform();
+                    const c1x = from.x + from.w / 2, c1y = from.y + from.h / 2;
+                    const c2x = to.x + to.w / 2, c2y = to.y + to.h / 2;
+
+                    // comece/termine FORA da borda para a seta aparecer
+                    const start = pointOnRectEdge(c1x, c1y, from.w, from.h, c2x, c2y, 10);
+                    const end = pointOnRectEdge(c2x, c2y, to.w, to.h, c1x, c1y, 10);
+
+                    // curvatura mais curta e suave
+                    const dx = end.x - start.x, dy = end.y - start.y;
+                    const k = 0.28; // 0.25~0.35 funciona bem
+                    const cx1 = start.x + dx * k, cy1 = start.y + dy * k;
+                    const cx2 = end.x - dx * k, cy2 = end.y - dy * k;
+
+                    const d = `M ${start.x} ${start.y} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${end.x} ${end.y}`;
+                    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                    path.setAttribute("class", "edge");
+                    path.setAttribute("d", d);
+                    edgesSvg.appendChild(path);
+                }
+
+                // reset navegação
+                scale = 1; originX = 0; originY = 0; updateTransform();
             };
-            reader.readAsText(file);
+            reader.readAsText(canvasFile);
         });
     </script>
 </body>
